@@ -1,0 +1,164 @@
+==================
+cmd_nav_commander:
+==================
+
+Converts rviz goals to cmd_nav points
+
+Subscribers: 
+/move_base_simple/goal
+
+Publishers:
+/cmd_nav
+
+===================
+cmd_pose_commander:
+===================
+
+Converts rviz goals to cmd_pose points
+
+Subscribers:
+/move_base_simple/goal
+
+Publishes:
+/cmd_nav
+
+==========
+detectors:
+==========
+
+Detects and classifies objects from camera images
+
+Subscribers:
+/camera/image_raw
+/camera/camera_info
+/scan
+
+Publishes:
+/detector/<objectName>
+where <objectName> is the label of the classified object.
+See ../tfmodels/coc_labels.txt for list of labels
+Note: the published message has distance, thetaLeft and thetaRight for mapping
+
+
+==================
+detector_mobilenet
+==================
+
+Detects and classifies objects from compressed camera images
+
+Subscribers:
+/raspicam_node/image_raw
+/raspicam_node/image/compressed
+/raspicam_node/camera_info
+/scan'
+
+Publishes:
+/detector/<objectName>
+where <objectName> is the label of the classified object.
+See ../tfmodels/coc_labels.txt for list of labels
+Note: the published message has distance, thetaLeft and thetaRight for mapping
+
+
+=============
+detector_viz:
+=============
+
+Visualize image and images and detector output
+
+
+Subscribers:
+/detector/objects
+/camera_relay/image_raw
+/camera_relay/image/compressed
+
+
+Outputs:
+Camera Plot
+
+====
+grid
+====
+
+TODO (some sort of plottig tool)
+
+
+==========
+navigator:
+==========
+
+Converts a cmd_nav to the navigation path, pose and velocity
+
+Subscribers:
+/map
+/map_metadata
+/cmd_nav
+
+Publishes:
+/cmd_path
+/cmd_pose
+/cmd_path_sp
+/cmd_vel
+
+
+================
+pose_controller:
+================
+
+Convert desired pose to commands
+
+Subscribers:
+/cmd_pose
+
+Publishes:
+/cmd_vel
+
+
+===========
+puddle_viz:
+===========
+
+Visualize detected puddles in rviz
+
+Subscribers:
+/velodyne_puddle_filter
+
+Publishes:
+/viz/puddle
+
+
+
+
+===========
+Supervisor:
+===========
+
+Main command node for robot (FSM)
+
+SUbscribers:
+/detector/stop_sign
+/nav_pose
+/move_base_simple/goal
+
+Publishes:
+/cmd_pose
+/cmd_nav
+/cmd_vel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
