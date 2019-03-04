@@ -53,6 +53,7 @@ class Supervisor:
         # COmmand line argument parser
         parser = ArgumentParser(description='Robot Supervisor Options')
         parser.add_argument('-f', '--foods', nargs='+', help='Specify food to pickup')
+
         args = parser.parse_args()
 
         rospy.init_node('turtlebot_supervisor', anonymous=True)
@@ -60,7 +61,7 @@ class Supervisor:
         self.x = 0
         self.y = 0
         self.theta = 0
-        self.pickup = False
+        self.pickup = 1 if len(args.foods)>0 else 0
         self.food_index = 0
         self.food_pickup_list = args.foods
         self.mode = Mode.IDLE
@@ -122,6 +123,8 @@ class Supervisor:
     def food_list_callback(self, msg):
         #list of all foods
         self.food_loc_dict = msg
+        self.set_food_pickup_loc()
+        self.mode = Mode.PICKUP
 
     def nav_pose_callback(self, msg):
         self.x_g = msg.x
@@ -158,10 +161,11 @@ class Supervisor:
         nav_g_msg.y = self.y_g
         nav_g_msg.theta = self.theta_g
 
-        self.nav_goal_publisher.publish(nav_g_msg)
+        self.pose_goal_publisher.publish(nav_g_msg)
 
     def set_food_pickup_loc(self):
-        (self.x_g,self.y_g) = self.food_loc_dict.values()[self.food_index]
+        self.x_g = self.food_loc_dict.x[self.food_index]
+        self.y_g = self.food_loc_dict.y[self.food_index]
         self.theta_g = 0
 
     def stay_idle(self):
@@ -172,7 +176,6 @@ class Supervisor:
 
     def close_to(self,x,y,theta):
         """ checks if the robot is at a pose within some threshold """
-
         return (abs(x-self.x)<POS_EPS and abs(y-self.y)<POS_EPS and abs(theta-self.theta)<THETA_EPS)
 
     def init_stop_sign(self):
@@ -251,7 +254,7 @@ class Supervisor:
                 self.nav_to_pose()
 
         elif self.mode == Mode.PICKUP:
-            if self.close_to(nav_food_msg.x,nav_food_msg.y,nav_food_msg.theta):
+            if self.close_to(self.x_g,self.y_g,self.theta_g):
                 self.food_index += 1
                 self.set_food_pickup_loc()
                 if food_index == len(self.food_pickup_list):

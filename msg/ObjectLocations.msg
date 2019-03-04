@@ -1,3 +1,3 @@
-string[] name
+string[] names
 float64[] x
 float64[] y

@@ -1,9 +1,11 @@
 <launch>
   <rosparam param="sim">false</rosparam>
   <rosparam param="map">true</rosparam>
+  <rosparam param="use_tf">true</rosparam>
 
   <node pkg="aa274_final" type="pose_controller.py" name="turtlebot_pose_controller" />
   <node pkg="aa274_final" type="cmd_pose_commander.py" name="cmd_pose_commander" />
+  <node pkg="aa274_final" type="detector.py" name="detector" />
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find aa274_final)/rviz/project_sim.rviz"/>
 </launch>

@@ -10,6 +10,8 @@ import rospy
 from geometry_msgs.msg import PointStamped, Point
 import tf
 from aa274_final.msg import DetectedObjectList, ObjectLocations
+import numpy as np
+
 
 class ObjectLocationTracker():
 
@@ -42,11 +44,11 @@ class ObjectLocationTracker():
     def getMapCoords(self, r, th):
         dx = r * np.cos(th)
         dy = r * np.sin(th)
-        point = PointSamped()
+        point = PointStamped()
         point.point.x = dx
         point.point.y = dy
-        point.header.frame_id = '/base_camera'
-        point.header.stamp = rospy.Time.now()
+        point.header.frame_id = '/base_footprint'
+        point.header.stamp = rospy.Time(0)
 
         p_out = self.trans_listener.transformPoint('/map',point)
         return p_out
@@ -55,7 +57,7 @@ class ObjectLocationTracker():
     def detected_objects_name_callback(self, msg):
         detected_objects = msg
 
-        for ob_msg in self.detected_objects.ob_msgs:
+        for ob_msg in detected_objects.ob_msgs:
             lbl = ob_msg.name
             if lbl in self.food_list:
                 dist = ob_msg.distance
@@ -63,11 +65,9 @@ class ObjectLocationTracker():
                 thetaright = ob_msg.thetaright
                 theta = (thetaleft+thetaright)/2
 
-                self.updatePose()
                 p_out = self.getMapCoords(dist,theta)
                 self.object_dict[lbl] = [p_out.point.x, p_out.point.y]
                 self.detected_flag = True
-
 
     def publish(self):
         names = self.object_dict.keys()
@@ -77,8 +77,7 @@ class ObjectLocationTracker():
         objloc.names=names
         objloc.x = x
         objloc.y = y
-        obj_pub.publish(objloc)
-
+        self.obj_pub.publish(objloc)
 
     def run(self):
         """ main loop """
