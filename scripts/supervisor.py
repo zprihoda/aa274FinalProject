@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
+from argparse import ArgumentParser
 import rospy
 from gazebo_msgs.msg import ModelStates
 from std_msgs.msg import Float32MultiArray, String
 from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
-from asl_turtlebot.msg import DetectedObject
+from aa274_final.msg import DetectedObject, ObjectLocations
 import tf
 import math
 from enum import Enum
@@ -48,6 +49,12 @@ print "mapping = %s\n" % mapping
 class Supervisor:
 
     def __init__(self):
+
+        # COmmand line argument parser
+        parser = ArgumentParser(description='Robot Supervisor Options')
+        parser.add_argument('-f', '--foods', nargs='+', help='Specify food to pickup')
+        args = parser.parse_args()
+
         rospy.init_node('turtlebot_supervisor', anonymous=True)
         # initialize variables
         self.x = 0
@@ -55,7 +62,7 @@ class Supervisor:
         self.theta = 0
         self.pickup = False
         self.food_index = 0
-        self.food_pickup_list = []
+        self.food_pickup_list = args.foods
         self.mode = Mode.IDLE
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
@@ -78,7 +85,7 @@ class Supervisor:
         rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.rviz_goal_callback)
         #subsrcribe to food list
         rospy.Subscriber('/objectLocations', ObjectLocations, self.food_list_callback)
-        
+
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
         twist = msg.twist[msg.name.index("turtlebot3_burger")]
@@ -97,7 +104,7 @@ class Supervisor:
         origin_frame = "/map" if mapping else "/odom"
         print("rviz command received!")
         try:
-            
+
             nav_pose_origin = self.trans_listener.transformPose(origin_frame, msg)
             self.x_g = nav_pose_origin.pose.position.x
             self.y_g = nav_pose_origin.pose.position.y
@@ -112,7 +119,7 @@ class Supervisor:
             pass
         self.mode = Mode.NAV
 
-    def food_callback(self, msg):
+    def food_list_callback(self, msg):
         #list of all foods
         self.food_loc_dict = msg
 
