@@ -5,12 +5,15 @@ Spawns the LocationTracker node
 Takes detections and converts them to map locations
 """
 
-
 import rospy
 from geometry_msgs.msg import PointStamped, Point
 import tf
 from aa274_final.msg import DetectedObjectList, ObjectLocations
 import numpy as np
+import numpy.linalg as npl
+
+
+ERR_THRESH = 0.25   # meters before we make a new object
 
 
 class ObjectLocationTracker():
@@ -25,23 +28,22 @@ class ObjectLocationTracker():
 
         # Sbuscribers
         rospy.Subscriber('/detector/objects', DetectedObjectList,
-                         self.detected_objects_name_callback, queue_size=10)
-
+                         self.detected_objects_callback, queue_size=10)
         self.trans_listener = tf.TransformListener()
 
         # Publishers
         self.obj_pub = rospy.Publisher('/objectLocations', ObjectLocations, queue_size=10)
 
-
     @classmethod
     def getFoodList(cls):
-        """ Return list of labels to identify foods """
+        """ Return list of labels to identify as foods """
         with open('list_foods') as f:
             lines = f.read()
             foods = lines.split()
         return foods
 
     def getMapCoords(self, r, th):
+        """ Convert r and theta to map coordinates """
         dx = r * np.cos(th)
         dy = r * np.sin(th)
         point = PointStamped()
@@ -54,8 +56,21 @@ class ObjectLocationTracker():
         p_out = self.trans_listener.transformPoint('/map',point)
         return p_out
 
+    def getObjectIdx(self,lbl,p_out):
+        """
+        Determines whether an object is already being tracked
+        If tracked: returns 0
+        If not: returns new idx
+        """
+        matching_lbls = [k for k in self.object_dict.keys() if lbl in k]
+        for tracked_lbl in matching_lbls:
+            tracked_pt = self.object_dict[tracked_lbl]
+            dist_err = npl.norm([p_out.x-tracked_pt[0], p_out.y-tracked_pt[1]])
+            if dist_err < ERR_THRESH:
+                return 0    # already tracked
+        return len(matching_lbls)
 
-    def detected_objects_name_callback(self, msg):
+    def detected_objects_callback(self, msg):
         detected_objects = msg
 
         for ob_msg in detected_objects.ob_msgs:
@@ -65,8 +80,15 @@ class ObjectLocationTracker():
                 thetaleft = ob_msg.thetaleft
                 thetaright = ob_msg.thetaright
                 theta = (thetaleft+thetaright)/2
-
                 p_out = self.getMapCoords(dist,theta)
+
+                if lbl in self.object_dict.keys():
+                    new_flag = self.getObjectIdx(lbl,p_out)
+                    if new_flag:
+                        lbl += new_flag
+                    else:   # is already tracked
+                        continue
+
                 self.object_dict[lbl] = [p_out.point.x, p_out.point.y]
                 self.detected_flag = True
 
