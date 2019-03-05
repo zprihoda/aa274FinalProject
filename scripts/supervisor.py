@@ -61,7 +61,7 @@ class Supervisor:
         self.x = 0
         self.y = 0
         self.theta = 0
-        self.pickup = 1 if len(args.foods)>0 else 0
+        self.pickup = args.foods
         self.food_index = 0
         self.food_pickup_list = args.foods
         self.mode = Mode.IDLE
@@ -274,5 +274,11 @@ class Supervisor:
             rate.sleep()
 
 if __name__ == '__main__':
+
     sup = Supervisor()
-    sup.run()
+    try:
+        sup.run()
+    except KeyboardInterrupt:
+        sup.stay_idle() # send command to stop
+
+
