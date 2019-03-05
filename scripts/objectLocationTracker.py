@@ -47,9 +47,10 @@ class ObjectLocationTracker():
         point = PointStamped()
         point.point.x = dx
         point.point.y = dy
-        point.header.frame_id = '/base_footprint'
+        point.header.frame_id = '/base_camera'
         point.header.stamp = rospy.Time(0)
 
+        self.trans_listener.waitForTransform('/map','/base_camera',rospy.Time(0),rospy.Duration(4.0))
         p_out = self.trans_listener.transformPoint('/map',point)
         return p_out
 
