@@ -161,12 +161,13 @@ class Detector:
             meas = ranges[rightray_indx:leftray_indx]
 
         num_m, dist = 0, 0
+        m_arr = []
         for m in meas:
             if m>0 and m<float('Inf'):
-                dist += m
+                m_arr.append(m)
                 num_m += 1
         if num_m>0:
-            dist /= num_m
+            dist = np.median(m_arr)
 
         return dist
 
