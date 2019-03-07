@@ -49,10 +49,10 @@ class ObjectLocationTracker():
         point = PointStamped()
         point.point.x = dx
         point.point.y = dy
-        point.header.frame_id = '/base_camera'
+        point.header.frame_id = '/camera'
         point.header.stamp = rospy.Time(0)
 
-        self.trans_listener.waitForTransform('/map','/base_camera',rospy.Time(0),rospy.Duration(4.0))
+        self.trans_listener.waitForTransform('/map','/camera',rospy.Time(0),rospy.Duration(4.0))
         p_out = self.trans_listener.transformPoint('/map',point)
         return p_out
 
@@ -65,7 +65,7 @@ class ObjectLocationTracker():
         matching_lbls = [k for k in self.object_dict.keys() if lbl in k]
         for tracked_lbl in matching_lbls:
             tracked_pt = self.object_dict[tracked_lbl]
-            dist_err = npl.norm([p_out.x-tracked_pt[0], p_out.y-tracked_pt[1]])
+            dist_err = npl.norm([p_out.point.x-tracked_pt[0], p_out.point.y-tracked_pt[1]])
             if dist_err < ERR_THRESH:
                 return 0    # already tracked
         return len(matching_lbls)
@@ -79,13 +79,15 @@ class ObjectLocationTracker():
                 dist = ob_msg.distance
                 thetaleft = ob_msg.thetaleft
                 thetaright = ob_msg.thetaright
+                if thetaright > np.pi:
+                    thetaright -= 2*np.pi
                 theta = (thetaleft+thetaright)/2
                 p_out = self.getMapCoords(dist,theta)
 
                 if lbl in self.object_dict.keys():
                     new_flag = self.getObjectIdx(lbl,p_out)
                     if new_flag:
-                        lbl += new_flag
+                        lbl += str(new_flag)
                     else:   # is already tracked
                         continue
 
