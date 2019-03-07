@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
+from argparse import ArgumentParser
 import rospy
 from gazebo_msgs.msg import ModelStates
 from std_msgs.msg import Float32MultiArray, String
 from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
-from asl_turtlebot.msg import DetectedObject
+from aa274_final.msg import DetectedObject, ObjectLocations
 import tf
 import math
 from enum import Enum
@@ -38,6 +39,7 @@ class Mode(Enum):
     CROSS = 4
     NAV = 5
     MANUAL = 6
+    PICKUP = 7
 
 
 print "supervisor settings:\n"
@@ -47,11 +49,21 @@ print "mapping = %s\n" % mapping
 class Supervisor:
 
     def __init__(self):
+
+        # COmmand line argument parser
+        parser = ArgumentParser(description='Robot Supervisor Options')
+        parser.add_argument('-f', '--foods', nargs='+', help='Specify food to pickup')
+
+        args = parser.parse_args()
+
         rospy.init_node('turtlebot_supervisor', anonymous=True)
         # initialize variables
         self.x = 0
         self.y = 0
         self.theta = 0
+        self.pickup = args.foods
+        self.food_index = 0
+        self.food_pickup_list = args.foods
         self.mode = Mode.IDLE
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
@@ -72,7 +84,9 @@ class Supervisor:
             rospy.Subscriber('/gazebo/model_states', ModelStates, self.gazebo_callback)
         # we can subscribe to nav goal click
         rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.rviz_goal_callback)
-        
+        #subsrcribe to food list
+        rospy.Subscriber('/objectLocations', ObjectLocations, self.food_list_callback)
+
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
         twist = msg.twist[msg.name.index("turtlebot3_burger")]
@@ -91,7 +105,7 @@ class Supervisor:
         origin_frame = "/map" if mapping else "/odom"
         print("rviz command received!")
         try:
-            
+
             nav_pose_origin = self.trans_listener.transformPose(origin_frame, msg)
             self.x_g = nav_pose_origin.pose.position.x
             self.y_g = nav_pose_origin.pose.position.y
@@ -105,6 +119,12 @@ class Supervisor:
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             pass
         self.mode = Mode.NAV
+
+    def food_list_callback(self, msg):
+        #list of all foods
+        self.food_loc_dict = msg
+        self.set_food_pickup_loc()
+        self.mode = Mode.PICKUP
 
     def nav_pose_callback(self, msg):
         self.x_g = msg.x
@@ -141,7 +161,12 @@ class Supervisor:
         nav_g_msg.y = self.y_g
         nav_g_msg.theta = self.theta_g
 
-        self.nav_goal_publisher.publish(nav_g_msg)
+        self.pose_goal_publisher.publish(nav_g_msg)
+
+    def set_food_pickup_loc(self):
+        self.x_g = self.food_loc_dict.x[self.food_index]
+        self.y_g = self.food_loc_dict.y[self.food_index]
+        self.theta_g = 0
 
     def stay_idle(self):
         """ sends zero velocity to stay put """
@@ -151,7 +176,6 @@ class Supervisor:
 
     def close_to(self,x,y,theta):
         """ checks if the robot is at a pose within some threshold """
-
         return (abs(x-self.x)<POS_EPS and abs(y-self.y)<POS_EPS and abs(theta-self.theta)<THETA_EPS)
 
     def init_stop_sign(self):
@@ -229,6 +253,16 @@ class Supervisor:
             else:
                 self.nav_to_pose()
 
+        elif self.mode == Mode.PICKUP:
+            if self.close_to(self.x_g,self.y_g,self.theta_g):
+                self.food_index += 1
+                self.set_food_pickup_loc()
+                if food_index == len(self.food_pickup_list):
+                    #add some way to nav to home at end of pickups
+                    self.mode = Mode.IDLE
+            else:
+                self.nav_to_pose()
+
         else:
             raise Exception('This mode is not supported: %s'
                 % str(self.mode))
@@ -240,5 +274,11 @@ class Supervisor:
             rate.sleep()
 
 if __name__ == '__main__':
+
     sup = Supervisor()
-    sup.run()
+    try:
+        sup.run()
+    except KeyboardInterrupt:
+        sup.stay_idle() # send command to stop
+
+
