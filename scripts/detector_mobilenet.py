@@ -203,6 +203,7 @@ class Detector:
             mask = np.ones( (1, P.shape[1]), dtype=bool)
 
             # project points to pixel coordinates
+            P = np.vstack((P,np.ones((1,P.shape[1]),dtype=P.dtype)))
             p = np.matmul(self.P, P)
             u = p[0,:] / p[2,:]
             v = p[1,:] / p[2,:]
