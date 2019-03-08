@@ -105,7 +105,7 @@ class AStar(object):
         while current != self.x_init:
             path.append(self.came_from[current])
             current = path[-1]
-            
+
         return list(reversed(path))
 
     # Plots the path found in self.path and the obstacles
@@ -188,39 +188,37 @@ class DetOccupancyGrid2D(object):
             obs[1][1]-obs[0][1],))
 
 
-### TESTING
+if __name__ == "__main__":
+    ### TESTING
 
-# A simple example
-'''
-width = 10
-height = 10
-x_init = (0,0)
-x_goal = (8,8)
-obstacles = [((6,6),(8,7)),((2,1),(4,2)),((2,4),(4,6)),((6,2),(8,4))]
-occupancy = DetOccupancyGrid2D(width, height, obstacles) '''
+    if 0:   # A simple example
+        width = 10
+        height = 10
+        x_init = (0,0)
+        x_goal = (8,8)
+        obstacles = [((6,6),(8,7)),((2,1),(4,2)),((2,4),(4,6)),((6,2),(8,4))]
+        occupancy = DetOccupancyGrid2D(width, height, obstacles)
 
-# A large random example
-'''
-width = 101
-height = 101
-num_obs = 15
-min_size = 5
-max_size = 25
-obs_corners_x = np.random.randint(0,width,num_obs)
-obs_corners_y = np.random.randint(0,height,num_obs)
-obs_lower_corners = np.vstack([obs_corners_x,obs_corners_y]).T
-obs_sizes = np.random.randint(min_size,max_size,(num_obs,2))
-obs_upper_corners = obs_lower_corners + obs_sizes
-obstacles = zip(obs_lower_corners,obs_upper_corners)
-occupancy = DetOccupancyGrid2D(width, height, obstacles)
-x_init = tuple(np.random.randint(0,width-2,2).tolist())
-x_goal = tuple(np.random.randint(0,height-2,2).tolist())
-'''
+    if 1:   # A large random example
+        width = 101
+        height = 101
+        num_obs = 15
+        min_size = 5
+        max_size = 25
+        obs_corners_x = np.random.randint(0,width,num_obs)
+        obs_corners_y = np.random.randint(0,height,num_obs)
+        obs_lower_corners = np.vstack([obs_corners_x,obs_corners_y]).T
+        obs_sizes = np.random.randint(min_size,max_size,(num_obs,2))
+        obs_upper_corners = obs_lower_corners + obs_sizes
+        obstacles = zip(obs_lower_corners,obs_upper_corners)
+        occupancy = DetOccupancyGrid2D(width, height, obstacles)
+        x_init = tuple(np.random.randint(0,width-2,2).tolist())
+        x_goal = tuple(np.random.randint(0,height-2,2).tolist())
 
-astar = AStar((0, 0), (width, height), x_init, x_goal, occupancy)
+    astar = AStar((0, 0), (width, height), x_init, x_goal, occupancy)
 
-if not astar.solve():
-    print "No path found"
-    exit(0)
+    if not astar.solve():
+        print "No path found"
+        exit(0)
 
-astar.plot_path()
+    astar.plot_path()
