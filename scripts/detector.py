@@ -6,11 +6,13 @@ import os
 from tf import TransformListener
 import tensorflow as tf
 import numpy as np
-from sensor_msgs.msg import Image, CameraInfo, LaserScan
+import numpy.linalg as npl
+from sensor_msgs.msg import Image, CameraInfo, LaserScan, PointCloud2
 from asl_turtlebot.msg import DetectedObject
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import math
+import ros_numpy
 
 # path to the trained conv net
 PATH_TO_MODEL = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../tfmodels/stop_signs_gazebo.pb')
@@ -65,6 +67,8 @@ class Detector:
         self.laser_ranges = []
         self.laser_angle_increment = 0.01 # this gets updated
 
+        self.point_cloud_msg
+
         self.object_publishers = {}
         self.object_labels = load_object_labels(PATH_TO_LABELS)
 
@@ -72,6 +76,8 @@ class Detector:
         rospy.Subscriber('/camera/image_raw', Image, self.camera_callback, queue_size=1)
         rospy.Subscriber('/camera/camera_info', CameraInfo, self.camera_info_callback)
         rospy.Subscriber('/scan', LaserScan, self.laser_callback)
+        rospy.Subscriber('/velodyne_points', PointCloud2, self.velodyne_callback)
+        rospy.set_param("use_cloud_points", False)
 
     def run_detection(self, img):
         """ runs a detection method in a given image """
@@ -139,16 +145,17 @@ class Detector:
         """ takes in a pixel coordinate (u,v) and returns a tuple (x,y,z)
         that is a unit vector in the direction of the pixel, in the camera frame """
 
-        x = (u - self.cx)/self.fx
-        y = (v - self.cy)/self.fy
-        norm = math.sqrt(x*x + y*y + 1)
-        x /= norm
-        y /= norm
-        z = 1.0 / norm
+        ### YOUR CODE HERE ###
+
+        x = (u-self.cx)/self.fx
+        y = (v-self.cy)/self.fy
+        z = 1  #always consant as pixel only moves on the image plane, lec.5 slide 15
+
+        ### END OF YOUR CODE ###
 
         return (x,y,z)
 
-    def estimate_distance(self, thetaleft, thetaright, ranges):
+    def estimate_distance_scan(self, thetaleft, thetaright, ranges):
         """ estimates the distance of an object in between two angles
         using lidar measurements """
 
@@ -169,6 +176,33 @@ class Detector:
             dist /= num_m
 
         return dist
+
+
+    def estimate_distance_lidar(self, point_cloud_msg, umin, umax, vmin, vmax):
+        """ estimates the distance of an object using the 
+        full point cloud and the bounding box """
+
+        # transform positions to camera world coordinates
+        point_cloud_msg = TransformListener.transformPointCloud("/camera")        
+
+        # interpret message as xyz points: P is a 3 x N numpy array
+        P = ros_numpy.point_cloud2.get_xyz_points(point_cloud_msg, remove_nans=True, dtype=np.float)
+
+        # create filter mask to determine which points may correspond to object
+        mask = np.ones( (np.size(P, 1), 1), dtype=bool)
+
+        # project points to pixel coordinates
+        u = self.fx * P[1,:] / P[3,:]
+        v = self.fy * P[2,:] / P[3,:]
+
+        # filter points by depth and bounding box
+        mask = mask & P[3,:] >= 0 & umin <= u & u <= umax & vmin <= v & v <= vmax
+
+        # get median depth
+        dist = np.median(npl.norm(P[:,mask],axis=0))
+
+        return dist
+
 
     def camera_callback(self, msg):
         """ callback for camera images """
@@ -212,7 +246,10 @@ class Detector:
                     thetaright += 2.*math.pi
 
                 # estimate the corresponding distance using the lidar
-                dist = self.estimate_distance(thetaleft,thetaright,img_laser_ranges)
+                if rospy.get_param("use_point_cloud", True):
+                    dist = self.estimate_distance_lidar(self.point_cloud_msg, xmin, xmax, ymin, ymax)
+                else:
+                    dist = self.estimate_distance_scan(thetaleft,thetaright,img_laser_ranges)
 
                 if not self.object_publishers.has_key(cl):
                     self.object_publishers[cl] = rospy.Publisher('/detector/'+self.object_labels[cl],
@@ -238,17 +275,26 @@ class Detector:
         cx, cy are the center of the image in pixel (the principal point), fx and fy are
         the focal lengths. """
 
-        self.cx = msg.P[2]
-        self.cy = msg.P[6]
-        self.fx = msg.P[0]
-        self.fy = msg.P[5]
+        ### YOUR CODE HERE ###
+        # K is a a 1d array
+        self.cx = msg.K[2]
+        self.cy = msg.K[5]
+        self.fx = msg.K[0]
+        self.fy = msg.K[4]
+
+        ### END OF YOUR CODE ###
 
     def laser_callback(self, msg):
         """ callback for thr laser rangefinder """
-
-        self.laser_ranges = msg.ranges
-        self.laser_angle_increment = msg.angle_increment
-
+        if not rospy.get_param("use_point_cloud", True):
+            self.laser_ranges = msg.ranges
+            self.laser_angle_increment = msg.angle_increment
+ 
+    def velodyne_callback(self, msg):
+        """ callback for thr laser rangefinder """
+        if rospy.get_param("use_point_cloud", True):
+            self.point_cloud_msg = msg
+ 
     def run(self):
         rospy.spin()
 
