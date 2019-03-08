@@ -6,11 +6,13 @@ import os
 from tf import TransformListener
 import tensorflow as tf
 import numpy as np
-from sensor_msgs.msg import CompressedImage, Image, CameraInfo, LaserScan
+import numpy.linalg as npl
+from sensor_msgs.msg import CompressedImage, Image, CameraInfo, LaserScan, PointCloud2
 from asl_turtlebot.msg import DetectedObject, DetectedObjectList
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import math
+import ros_numpy
 
 # path to the trained conv net
 PATH_TO_MODEL = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../tfmodels/ssd_mobilenet_v1_coco.pb')
@@ -67,8 +69,10 @@ class Detector:
         self.cy = 0.
         self.fx = 1.
         self.fy = 1.
+        self.P = np.zeros((3,4))
         self.laser_ranges = []
         self.laser_angle_increment = 0.01 # this gets updated
+        self.point_cloud_msg 
 
         self.object_publishers = {}
         self.object_labels = load_object_labels(PATH_TO_LABELS)
@@ -78,6 +82,9 @@ class Detector:
         rospy.Subscriber('/raspicam_node/image/compressed', CompressedImage, self.compressed_camera_callback, queue_size=1, buff_size=2**24)
         rospy.Subscriber('/raspicam_node/camera_info', CameraInfo, self.camera_info_callback)
         rospy.Subscriber('/scan', LaserScan, self.laser_callback)
+        rospy.Subscriber('/velodyne_points', PointCloud2, self.velodyne_callback)
+        if not rospy.has_param("use_point_cloud"):
+            rospy.set_param("use_point_cloud", False)
 
     def run_detection(self, img):
         """ runs a detection method in a given image """
@@ -177,6 +184,33 @@ class Detector:
 
         return dist
 
+    def estimate_distance_lidar(self, point_cloud_msg, umin, umax, vmin, vmax):
+            """ estimates the distance of an object using the 
+            full point cloud and the bounding box """
+
+            # transform positions to camera world coordinates
+            point_cloud_msg = self.tf_listener.transformPointCloud("\camera",point_cloud_msg)
+
+            # interpret message as xyz points: P is a 3 x N numpy array
+            P = ros_numpy.point_cloud2.get_xyz_points(point_cloud_msg, remove_nans=True, dtype=np.float)
+
+            # create filter mask to determine which points may correspond to object
+            mask = np.ones( (1, P.shape[1]), dtype=bool)
+
+            # project points to pixel coordinates
+            p = np.matmul(self.P, P)
+            u = p[0,:] / p[2,:]
+            v = p[1,:] / p[2,:]
+
+            # filter points by depth and bounding box
+            mask = mask & P[3,:] >= 0 & umin <= u & u <= umax & vmin <= v & v <= vmax
+
+            # get median range
+            dist = np.median(npl.norm(P[:,mask],axis=0))
+
+            return dist
+
+
     def camera_callback(self, msg):
         """ callback for camera images """
 
@@ -239,7 +273,10 @@ class Detector:
                     thetaright += 2.*math.pi
 
                 # estimate the corresponding distance using the lidar
-                dist = self.estimate_distance(thetaleft,thetaright,img_laser_ranges)
+                if rospy.get_param("use_point_cloud", False):
+                    dist = self.estimate_distance_lidar(self.point_cloud_msg, xmin, xmax, ymin, ymax)
+                else:
+                    dist = self.estimate_distance(thetaleft,thetaright,img_laser_ranges)
 
                 if not self.object_publishers.has_key(cl):
                     self.object_publishers[cl] = rospy.Publisher('/detector/'+self.object_labels[cl],
@@ -272,16 +309,23 @@ class Detector:
         the focal lengths. Stores the result in the class itself as self.cx, self.cy,
         self.fx and self.fy """
 
+        self.P = np.reshape(msg.P,(3,4))
         self.cx = msg.P[2]
         self.cy = msg.P[6]
         self.fx = msg.P[0]
         self.fy = msg.P[5]
+        
 
     def laser_callback(self, msg):
-        """ callback for thr laser rangefinder """
-
+    """ callback for thr laser rangefinder """
+    if not rospy.get_param("use_point_cloud", False):
         self.laser_ranges = msg.ranges
         self.laser_angle_increment = msg.angle_increment
+ 
+    def velodyne_callback(self, msg):
+        """ callback for thr laser rangefinder """
+        if rospy.get_param("use_point_cloud", False):
+            self.point_cloud_msg = msg
 
     def run(self):
         rospy.spin()
