@@ -1,3 +1,4 @@
+import rospy
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -73,19 +74,19 @@ class AStar(object):
     # OUTPUT: List of neighbors that are free, as a list of TUPLES
     def get_neighbors(self, x):
         list_ns = []
-    	pt_x = x[0]
-    	pt_y = x[1]
+        pt_x = x[0]
+        pt_y = x[1]
         delta = self.resolution*np.array([-1,0,1])
         for x_delta in delta:
-        	for y_delta in delta:
-        		#Dont add case where x_delta=y_delta=0 = orig. point
-        		if x_delta != 0 and y_delta != 0:
-        			pt_delta = (pt_x+x_delta,pt_y+y_delta)
-        			#Check if point is valid
-        			if self.is_free(pt_delta) == True:
-        				#snap to grid
-        				snap_pt = self.snap_to_grid(pt_delta)
-        				list_ns.append(snap_pt)
+            for y_delta in delta:
+                #Dont add case where x_delta=y_delta=0 = orig. point
+                if not (x_delta == 0 and y_delta == 0):
+                    pt_delta = (pt_x+x_delta,pt_y+y_delta)
+                    #Check if point is valid
+                    if self.is_free(pt_delta) == True:
+                        #snap to grid
+                        snap_pt = self.snap_to_grid(pt_delta)
+                        list_ns.append(snap_pt)
         return list_ns
 
 
@@ -136,27 +137,28 @@ class AStar(object):
     # OUTPUT: Boolean, True if a solution from x_init to x_goal was found
     def solve(self):
         while len(self.open_set)>0:
-        	n_current = self.find_best_f_score()
-        	#If goal found
-        	if n_current == self.x_goal:
-        		self.path = self.reconstruct_path()
-        		return True
-        	self.open_set.remove(n_current)
-        	self.closed_set.append(n_current)
-        	#NBs = neighbors
-        	NBs = self.get_neighbors(n_current)
-        	for NB in NBs:
-        		if NB in self.closed_set:
-        			continue
-        		NB_gscore = self.distance(n_current,self.x_init) + self.distance(n_current,NB)
-        		if NB not in self.open_set:
-        			self.open_set.append(NB)
-        		elif NB_gscore > self.distance(NB,self.x_init):
-        			continue
-        		NB_hscore = self.distance(NB,self.x_goal)
-        		self.f_score[NB] = NB_gscore + NB_hscore
-        		self.g_score[NB] = NB_gscore
-        		self.came_from[NB] = n_current
+            rospy.loginfo("here")
+            n_current = self.find_best_f_score()
+            #If goal found
+            if n_current == self.x_goal:
+                self.path = self.reconstruct_path()
+                return True
+            self.open_set.remove(n_current)
+            self.closed_set.append(n_current)
+            #NBs = neighbors
+            NBs = self.get_neighbors(n_current)
+            for NB in NBs:
+                if NB in self.closed_set:
+                    continue
+                NB_gscore = self.distance(n_current,self.x_init) + self.distance(n_current,NB)
+                if NB not in self.open_set:
+                    self.open_set.append(NB)
+                elif NB_gscore > self.distance(NB,self.x_init):
+                    continue
+                NB_hscore = self.distance(NB,self.x_goal)
+                self.f_score[NB] = NB_gscore + NB_hscore
+                self.g_score[NB] = NB_gscore
+                self.came_from[NB] = n_current
         return False
 
 # A 2D state space grid with a set of rectangular obstacles. The grid is fully deterministic
@@ -191,7 +193,7 @@ class DetOccupancyGrid2D(object):
 if __name__ == "__main__":
     ### TESTING
 
-    if 0:   # A simple example
+    if 1:   # A simple example
         width = 10
         height = 10
         x_init = (0,0)
@@ -199,7 +201,7 @@ if __name__ == "__main__":
         obstacles = [((6,6),(8,7)),((2,1),(4,2)),((2,4),(4,6)),((6,2),(8,4))]
         occupancy = DetOccupancyGrid2D(width, height, obstacles)
 
-    if 1:   # A large random example
+    if 0:   # A large random example
         width = 101
         height = 101
         num_obs = 15
@@ -214,6 +216,7 @@ if __name__ == "__main__":
         occupancy = DetOccupancyGrid2D(width, height, obstacles)
         x_init = tuple(np.random.randint(0,width-2,2).tolist())
         x_goal = tuple(np.random.randint(0,height-2,2).tolist())
+
 
     astar = AStar((0, 0), (width, height), x_init, x_goal, occupancy)
 
