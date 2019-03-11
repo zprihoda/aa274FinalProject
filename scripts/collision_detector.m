@@ -1,4 +1,4 @@
-try
+% try
     %% initialize collider object
     c = Collider();
     p = rosparam;
@@ -9,18 +9,19 @@ try
     while(1)
         % if no pose subscriber, poll
         if isempty(c.subp)
-            c.pose_callback(c.getPoseFromTF());
+            c.pose_callback([],c.getPoseFromTF());
         end
         
         % publish collision
         c.pub_collision();
         
         % wait
-        sleep(rosrate(p.get('collision_detector_rate')));
+%         waitfor(rosrate(p.get('collision_detector_rate')));
+        pause(0.05)
         
     end
-    
-catch colliderException
-    disp(colliderException);
-    rethrow(colliderException);
-end
+%     
+% catch colliderException
+%     disp(colliderException);
+%     rethrow(colliderException);
+% end

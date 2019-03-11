@@ -10,8 +10,13 @@ classdef Collider < matlab.mixin.Copyable
         
         odp = rosmessage('nav_msgs/Odometry') % previous odometry
         odn = rosmessage('nav_msgs/Odometry') % next odometry
+        
+        cvp = rosmessage('geometry_msgs/Twist') % previous vel message
+        cvn = rosmessage('geometry_msgs/Twist') % next vel message
+        
         subp                % pose subscriber
         subo                % odometry subscriber
+        subvel              % cmd_vel subscriber
         pub                 % collision publisher
         tf              % transform listener
         
@@ -26,15 +31,15 @@ classdef Collider < matlab.mixin.Copyable
             end
             
             if ~p.has('ang_vel_thres')
-                p.set('set', 'ang_vel_thres', deg2rad(10));
+                p.set('ang_vel_thres', deg2rad(10));
             end
             
             if ~p.has('pos_dur_thres')
-                p.set('set', 'pos_dur_thres', 1);
+                p.set('pos_dur_thres', 1);
             end
             
             if ~p.has('odm_dur_thres')
-                p.set('set', 'odm_dur_thres', 1);
+                p.set('odm_dur_thres', 1);
             end
             
             if p.has('sim')
@@ -51,13 +56,24 @@ classdef Collider < matlab.mixin.Copyable
             
             obj.subo = rossubscriber('/odom', ('nav_msgs/Odometry'),    @obj.odom_callback);
             
+            obj.subvel = rossubscriber('/cmd_vel', 'geometry_msgs/Twist', @obj.cmdvel_callback);
+            
             obj.pub  = rospublisher('/collision', 'std_msgs/Bool');
             
             obj.tf = rostf;
             
+            pause(1); % wait a literal second so tf doesn't bug out
+            
         end
         
-        function gazebo_callback(obj, gmsg)
+        function cmdvel_callback(obj, src, msg)
+            
+            obj.cvp = obj.cvn;
+            obj.cvn = msg;
+            
+        end
+        
+        function gazebo_callback(obj, src, gmsg)
             % convert to Pose2D message
             quat = gmsg.Pose.Orientation;
             ang = (quat2eul([quat.W quat.X quat.Y quat.Z]));
@@ -75,15 +91,17 @@ classdef Collider < matlab.mixin.Copyable
             obj.ptn = rostime("now");
         end
         
-        function pose_callback(obj, msg)
-            obj.pop = obj.pon;
-            obj.pon = msg;
-            
-            obj.ptp = obj.ptn;
-            obj.ptn = rostime("now");
+        function pose_callback(obj, src, msg)
+            if ~isempty(msg)
+                obj.pop = obj.pon;
+                obj.pon = msg;
+                
+                obj.ptp = obj.ptn;
+                obj.ptn = rostime("now");
+            end
         end
         
-        function odom_callback(obj, msg)
+        function odom_callback(obj, src, msg)
             obj.odp = obj.odn;
             obj.odn = msg;
         end
@@ -91,18 +109,30 @@ classdef Collider < matlab.mixin.Copyable
         function msg = getPoseFromTF(obj)
             
             % get transform
-            tform = obj.tf.getTransform('/map','/base_footprint');
-            
-            % convert to pose
-            quat = tform.Transform.Rotation;
-            ang = (quat2eul([quat.W quat.X quat.Y quat.Z]));
-            
-            % create msg
+            opts = {'base_footprint','map',rostime(0)};
             msg = rosmessage('geometry_msgs/Pose2D');
-            msg.X = tform.Transform.Translation.X;
-            msg.Y = tform.Transform.Translation.Y;
-            msg.Theta = ang(3);
-            
+            if ~ obj.tf.canTransform(opts{1:2})
+                % send empty message
+                msg = [];
+                return
+            else
+                try
+                    tform = obj.tf.getTransform(opts{:});
+                catch ME
+                    disp(ME); % display error, but don't die
+                    msg = []; % tform still failed: return empty msg
+                    return
+                end
+                
+                % convert to pose
+                quat = tform.Transform.Rotation;
+                ang = (quat2eul([quat.W quat.X quat.Y quat.Z]));
+                
+                % create msg
+                msg.X = tform.Transform.Translation.X;
+                msg.Y = tform.Transform.Translation.Y;
+                msg.Theta = ang(3);
+            end
         end
         
         function bool = collided(obj)
@@ -111,8 +141,10 @@ classdef Collider < matlab.mixin.Copyable
             odm_dur = (obj.odp.Header.Stamp - obj.odn.Header.Stamp);
             
             % get avg odom velocity reading
-            odm_lin_vel = (obj.odn.Twist.Twist.Linear +  obj.odp.Twist.Twist.Linear) ./ 2;
-            odm_ang_vel = (obj.odn.Twist.Twist.Angular + obj.odp.Twist.Twist.Angular) ./ 2;
+            cmd_lin_vel_x = (obj.cvn.Linear.X +  obj.cvp.Linear.X) ./ 2;
+            cmd_lin_vel_y = (obj.cvn.Linear.Y +  obj.cvp.Linear.Y) ./ 2;
+            cmd_lin_vel = sqrt(cmd_lin_vel_x.^2 + cmd_lin_vel_y.^2);
+            cmd_ang_vel = (obj.cvn.Angular.Z + obj.cvp.Angular.Z) ./ 2;
             
             % get avg pose velocity reading
             dt_inv = 1./pos_dur.Sec;
@@ -124,8 +156,10 @@ classdef Collider < matlab.mixin.Copyable
             
             % wheels moving faster than position changes / orientation
             % turning faster than supposed to
-            obj.collision = (abs(odm_lin_vel) - abs(pos_lin_vel)) > p.get('lin_vel_thres') || ...
-                abs(odm_ang_vel - pos_ang_vel) > p.get('ang_vel_thres');
+            fprintf('\ncmd_lin_vel: %0.3f', cmd_lin_vel)
+            fprintf('\tpos_lin_vel: %0.3f', pos_lin_vel)
+            obj.collision = abs((cmd_lin_vel) - (pos_lin_vel)) > p.get('lin_vel_thres'); ... || ...
+%                 abs(cmd_ang_vel - pos_ang_vel) > p.get('ang_vel_thres');
             
             % time diff more than allowed
             obj.valid_update = pos_dur.Sec < p.get('pos_dur_thres') && ...
