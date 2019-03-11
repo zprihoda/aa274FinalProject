@@ -5,6 +5,9 @@
   <node pkg="aa274_final" type="navigator.py" name="turtlebot_navigator" />
   <node pkg="aa274_final" type="pose_controller.py" name="turtlebot_pose_controller" />
   <node pkg="aa274_final" type="cmd_nav_commander.py" name="cmd_nav_commander" />
+  <node pkg="aa274_final" type="objectLocationTracker.py" name="object_location_tracker" />
+  <node pkg="aa274_final" type="locationTracker_viz.py" name="object_location_tracker_viz" />
+
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find aa274_final)/rviz/project_sim.rviz"/>
 </launch>
