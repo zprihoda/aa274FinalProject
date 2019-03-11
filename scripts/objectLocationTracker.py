@@ -11,7 +11,7 @@ import tf
 from aa274_final.msg import DetectedObjectList, ObjectLocations
 import numpy as np
 import numpy.linalg as npl
-
+import os
 
 ERR_THRESH = 0.25   # meters before we make a new object
 
@@ -37,7 +37,8 @@ class ObjectLocationTracker():
     @classmethod
     def getFoodList(cls):
         """ Return list of labels to identify as foods """
-        with open('list_foods') as f:
+        path = '/'.join(os.path.realpath(__file__).split('/')[0:-1])
+        with open(path+'/list_foods') as f:
             lines = f.read()
             foods = lines.split()
         return foods
@@ -49,10 +50,10 @@ class ObjectLocationTracker():
         point = PointStamped()
         point.point.x = dx
         point.point.y = dy
-        point.header.frame_id = '/camera'
+        point.header.frame_id = '/base_footprint'
         point.header.stamp = rospy.Time(0)
 
-        self.trans_listener.waitForTransform('/map','/camera',rospy.Time(0),rospy.Duration(4.0))
+        self.trans_listener.waitForTransform('/map','/base_footprint',rospy.Time(0),rospy.Duration(4.0))
         p_out = self.trans_listener.transformPoint('/map',point)
         return p_out
 
@@ -76,6 +77,7 @@ class ObjectLocationTracker():
         for ob_msg in detected_objects.ob_msgs:
             lbl = ob_msg.name
             if lbl in self.food_list:
+
                 dist = ob_msg.distance
                 thetaleft = ob_msg.thetaleft
                 thetaright = ob_msg.thetaright
