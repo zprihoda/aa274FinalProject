@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 
+"""
+FOr testing:
+# manually publish object locations
+rostopic pub -r 10 /objectLocations aa274_final/ObjectLocations '{names: [apple], x: [0], y: [2]}'
+# send via request publiser
+
+"""
+
 from argparse import ArgumentParser
 import rospy
 from gazebo_msgs.msg import ModelStates
@@ -123,7 +131,7 @@ class Supervisor:
             self.food_loc_dict[food] = [msg.x[i], msg.y[i]]
 
     def delivery_request_callback(self, msg):
-        self.food_pickup_list = msg.split(',')
+        self.food_pickup_list = msg.data.split(',')
         self.pickup_idx = 0
         self.mode = Mode.FOODNAV
 
@@ -133,7 +141,7 @@ class Supervisor:
         self.theta_g = 0
 
     def init_pickup(self):
-        self.pickup_Start = rospy.get_rostime()
+        self.pickup_start = rospy.get_rostime()
         self.mode = Mode.FOODPICKUP
 
     def has_pickedup(self):
@@ -187,6 +195,10 @@ class Supervisor:
     def close_to(self,x,y,theta):
         """ checks if the robot is at a pose within some threshold """
         return (abs(x-self.x)<POS_EPS and abs(y-self.y)<POS_EPS and abs(theta-self.theta)<THETA_EPS)
+
+    def pos_close_to(self,x,y):
+        """ checks if the robot is at a pose within some threshold """
+        return (abs(x-self.x)<POS_EPS and abs(y-self.y)<POS_EPS)
 
     def init_stop_sign(self):
         """ initiates a stop sign maneuver """
@@ -270,18 +282,18 @@ class Supervisor:
 
         elif self.mode == Mode.FOODNAV:
             self.set_food_pickup_loc()
-            if self.close_to(self.x_g,self.y_g,self.theta_g):
-                self.pickup_init()
+            if self.pos_close_to(self.x_g,self.y_g):
+                self.init_pickup()
             else:
                 self.nav_to_pose()
 
         elif self.mode == Mode.FOODPICKUP:
-            if self.has_pickedup:
-                if self.pickup_idx == len(self.pickup_list):
+            if self.has_pickedup():
+                self.pickup_idx +=1
+                if self.pickup_idx == len(self.food_pickup_list):
                     self.return_home()
                     self.mode = Mode.NAV
                 else:
-                    self.pickup_idx +=1
                     self.mode = Mode.FOODNAV
             else:
                 self.stay_idle()
