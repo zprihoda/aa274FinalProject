@@ -138,7 +138,17 @@ class Supervisor:
         self.mode = Mode.FOODNAV
 
     def set_food_pickup_loc(self):
-        food = self.food_pickup_list[self.pickup_idx]
+        while True:
+            food = self.food_pickup_list[self.pickup_idx]
+            if food not in self.food_loc_dict:
+                print food + ' not in tracked objects.  Skipping'
+                self.pickup_idx += 1
+                if self.pickup_idx == len(self.food_pickup_list): # reached end of list
+                    self.return_home()
+                    self.mode = Mode.NAV
+                    return
+            else:
+                break
         self.x_g, self.y_g = self.food_loc_dict[food]
         self.theta_g = 0
 
@@ -149,7 +159,6 @@ class Supervisor:
     def has_pickedup(self):
         """ checks if pickup maneuver is over """
         return (self.mode == Mode.FOODPICKUP and (rospy.get_rostime()-self.pickup_start)>rospy.Duration.from_sec(STOP_TIME))
-
 
     def nav_pose_callback(self, msg):
         self.x_g = msg.x
