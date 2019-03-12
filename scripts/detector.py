@@ -230,8 +230,8 @@ class Detector:
                 self.object_publishers[cl].publish(object_msg)
 
         # displays the camera image
-        cv2.imshow("Camera", img_bgr8)
-        cv2.waitKey(1)
+        #cv2.imshow("Camera", img_bgr8)
+        #cv2.waitKey(1)
 
     def camera_info_callback(self, msg):
         """ extracts relevant camera intrinsic parameters from the camera_info message.
