@@ -3,8 +3,7 @@
 """
 FOr testing:
 # manually publish object locations
-rostopic pub -r 10 /objectLocations aa274_final/ObjectLocations '{names: [apple], x: [0], y: [2]}'
-# send via request publiser
+rostopic pub -r 10 /objectLocations aa274_final/ObjectLocations '{names: [apple,banana], x: [2.0,0.25],  y: [0.25,1.5]}'
 
 """
 
@@ -64,6 +63,7 @@ class Supervisor:
         self.x = 0
         self.y = 0
         self.theta = 0
+        self.home = None    # will be set on first state update
         self.food_index = 0
         self.mode = Mode.IDLE
         self.last_mode_printed = None
@@ -102,6 +102,8 @@ class Supervisor:
                     pose.orientation.w)
         euler = tf.transformations.euler_from_quaternion(quaternion)
         self.theta = euler[2]
+        if self.home == None:
+            self.home = [self.x,self.y,self.theta]
 
     def rviz_goal_callback(self, msg):
         """ callback for a pose goal sent through rviz """
@@ -223,15 +225,11 @@ class Supervisor:
         return (self.mode == Mode.CROSS and (rospy.get_rostime()-self.cross_start)>rospy.Duration.from_sec(CROSSING_TIME))
 
     def return_home(self):
-        self.x_g = 0
-        self.y_g = 0
-        self.theta_g = 0
+        self.x_g = self.home[0]
+        self.y_g = self.home[1]
+        self.theta_g = self.home[2]
 
-    def loop(self):
-        """ the main loop of the robot. At each iteration, depending on its
-        mode (i.e. the finite state machine's state), if takes appropriate
-        actions. This function shouldn't return anything """
-
+    def update_state(self):
         if not use_gazebo:
             try:
                 origin_frame = "/map" if mapping else "/odom"
@@ -240,8 +238,18 @@ class Supervisor:
                 self.y = translation[1]
                 euler = tf.transformations.euler_from_quaternion(rotation)
                 self.theta = euler[2]
+                if self.home == None:
+                    self.home = [self.x,self.y,self.theta]
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 pass
+
+
+    def loop(self):
+        """ the main loop of the robot. At each iteration, depending on its
+        mode (i.e. the finite state machine's state), if takes appropriate
+        actions. This function shouldn't return anything """
+
+        self.update_state()
 
         # logs the current mode
         if not(self.last_mode_printed == self.mode):
