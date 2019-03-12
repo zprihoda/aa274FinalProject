@@ -10,7 +10,7 @@ class AStar(object):
         self.statespace_lo = statespace_lo         # state space lower bound (e.g., (-5, -5))
         self.statespace_hi = statespace_hi         # state space upper bound (e.g., (5, 5))
         self.occupancy = occupancy                 # occupancy grid
-        
+
         self.resolution = resolution               # resolution of the discretization of state space (cell/m)
         self.x_init = self.snap_to_grid(x_init)    # initial state
         self.x_goal = self.snap_to_grid(x_goal)    # goal state
@@ -168,7 +168,7 @@ class DetOccupancyGrid2D(object):
         self.width = width
         self.height = height
         self.obstacles = obstacles
-        self.buffer = 0.04  # assumes units = meters
+        self.buffer = 0.04 + 0.075 # safety_buffer + robot radius (meters)
 
     def is_free(self, x):
         for obs in self.obstacles:
