@@ -4,10 +4,11 @@ from argparse import ArgumentParser
 import rospy
 from gazebo_msgs.msg import ModelStates
 from std_msgs.msg import Float32MultiArray, String
-from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped
+from geometry_msgs.msg import Twist, PoseArray, Pose2D, PoseStamped, PointStamped
 from aa274_final.msg import DetectedObject, ObjectLocations
 import tf
 import math
+import numpy as np
 from enum import Enum
 
 # if sim is True/using gazebo, therefore want to subscribe to /gazebo/model_states\
@@ -21,6 +22,10 @@ mapping = rospy.get_param("map")
 # threshold at which we consider the robot at a location
 POS_EPS = .1
 THETA_EPS = .3
+
+#Thresholds for chase reaching a goal pose
+P_EPS_CHASE = 0.05
+TH_EPS_CHASE = 0.5
 
 # time to stop at a stop sign
 STOP_TIME = 3
@@ -40,6 +45,7 @@ class Mode(Enum):
     NAV = 5
     MANUAL = 6
     PICKUP = 7
+    CHASE = 8
 
 
 print "supervisor settings:\n"
@@ -87,6 +93,10 @@ class Supervisor:
         #subsrcribe to food list
         rospy.Subscriber('/objectLocations', ObjectLocations, self.food_list_callback)
 
+        #Subscribe to car detection and cmd nav
+        rospy.Subscriber('/detector/truck', DetectedObject,self.detected_car_callback)
+
+
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
         twist = msg.twist[msg.name.index("turtlebot3_burger")]
@@ -131,6 +141,45 @@ class Supervisor:
         self.y_g = msg.y
         self.theta_g = msg.theta
         self.mode = Mode.NAV
+
+    def getMapCoords(self, r, th):
+        """ Convert r and theta to map coordinates """
+        dx = r * np.cos(th)
+        dy = r * np.sin(th)
+        point = PointStamped()
+        point.point.x = dx
+        point.point.y = dy
+        point.header.frame_id = '/base_footprint'
+        point.header.stamp = rospy.Time(0)
+
+        self.trans_listener.waitForTransform('/map','/base_footprint',rospy.Time(0),rospy.Duration(4.0))
+        p_out = self.trans_listener.transformPoint('/map',point)
+        return p_out
+
+    def detected_car_callback(self, msg):
+        #Switch to chase mode -> car detected
+        self.MODE = Mode.CHASE
+        print(self.MODE)
+        dist_car = msg.distance
+        thetaleft = msg.thetaleft
+        thetaright = msg.thetaright
+        if thetaright > np.pi:
+            thetaright -= 2*np.pi
+        theta = (thetaleft+thetaright)/2
+        p_out = self.getMapCoords(dist_car,theta)
+
+        car_pose =  Pose2D()
+        car_pose.x = p_out.point.x
+        car_pose.y = p_out.point.y
+        car_pose.theta = self.theta #how to get point.theta??
+        print(car_pose)
+
+        self.x_g = car_pose.x
+        self.y_g = car_pose.y
+        self.theta_g = self.theta
+
+        self.nav_goal_publisher.publish(car_pose)
+
 
     def stop_sign_detected_callback(self, msg):
         """ callback for when the detector has found a stop sign. Note that
@@ -177,6 +226,10 @@ class Supervisor:
     def close_to(self,x,y,theta):
         """ checks if the robot is at a pose within some threshold """
         return (abs(x-self.x)<POS_EPS and abs(y-self.y)<POS_EPS and abs(theta-self.theta)<THETA_EPS)
+
+    def is_at_point(self,x,y,theta):
+        """ checks if the robot is at a pose within some threshold """
+        return (abs(x-self.x)<P_EPS_CHASE and abs(y-self.y)<P_EPS_CHASE and abs(theta-self.theta)<TH_EPS_CHASE)
 
     def init_stop_sign(self):
         """ initiates a stop sign maneuver """
@@ -262,6 +315,14 @@ class Supervisor:
                     self.mode = Mode.IDLE
             else:
                 self.nav_to_pose()
+
+        elif self.mode == Mode.CHASE:
+            #If it has reached the last obs of car without getting another obs do a search spin
+            if self.is_at_point(self.x_g,self.y_g,self.theta_g):
+                spin_msg.linear = Vector3(0.0,0.0,0.0)
+                spin_msg.angular = Vector3(0.0,0.0,0.2)
+                print("Searching for truck...")
+                self.cmd_vel_publisher.publish(spin_msg,Duration=8)
 
         else:
             raise Exception('This mode is not supported: %s'

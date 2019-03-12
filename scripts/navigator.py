@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 # threshold at which navigator switches
 # from trajectory to pose control
-END_POS_THRESH = .2
+END_POS_THRESH = .8
 
 # threshold to be far enough into the plan
 # to recompute it
@@ -92,6 +92,8 @@ class Navigator:
         rospy.Subscriber('/cmd_nav', Pose2D, self.cmd_nav_callback)
 
     def cmd_nav_callback(self, data):
+        print('at nav callback')
+        print('Curr:',self.x,self.y,'Goal:',self.x_g,self.y_g)
         self.x_g = data.x
         self.y_g = data.y
         self.theta_g = data.theta

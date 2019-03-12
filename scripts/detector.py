@@ -20,7 +20,7 @@ PATH_TO_LABELS = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../t
 # False will use a very simple color thresholding to detect stop signs only
 USE_TF = rospy.get_param("use_tf")
 # minimum score for positive detection
-MIN_SCORE = .5
+MIN_SCORE = .35
 
 def load_object_labels(filename):
     """ loads the coco object readable name """
