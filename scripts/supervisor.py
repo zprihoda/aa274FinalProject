@@ -39,7 +39,8 @@ class Mode(Enum):
     CROSS = 4
     NAV = 5
     MANUAL = 6
-    PICKUP = 7
+    FOODNAV = 7
+    FOODPICKUP = 8
 
 
 print "supervisor settings:\n"
@@ -50,20 +51,12 @@ class Supervisor:
 
     def __init__(self):
 
-        # COmmand line argument parser
-        parser = ArgumentParser(description='Robot Supervisor Options')
-        parser.add_argument('-f', '--foods', nargs='+', help='Specify food to pickup')
-
-        args = parser.parse_args()
-
         rospy.init_node('turtlebot_supervisor', anonymous=True)
         # initialize variables
         self.x = 0
         self.y = 0
         self.theta = 0
-        self.pickup = args.foods
         self.food_index = 0
-        self.food_pickup_list = args.foods
         self.mode = Mode.IDLE
         self.last_mode_printed = None
         self.trans_listener = tf.TransformListener()
@@ -84,8 +77,10 @@ class Supervisor:
             rospy.Subscriber('/gazebo/model_states', ModelStates, self.gazebo_callback)
         # we can subscribe to nav goal click
         rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.rviz_goal_callback)
-        #subsrcribe to food list
+
         rospy.Subscriber('/objectLocations', ObjectLocations, self.food_list_callback)
+        rospy.Subscriber('/delivery_request', String, self.delivery_request_callback)
+
 
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
@@ -121,10 +116,30 @@ class Supervisor:
         self.mode = Mode.NAV
 
     def food_list_callback(self, msg):
-        #list of all foods
-        self.food_loc_dict = msg
-        self.set_food_pickup_loc()
-        self.mode = Mode.PICKUP
+        #store list of all foods
+        self.food_loc_dict = {}
+        for i in range(len(msg.names)):
+            food = msg.names[i]
+            self.food_loc_dict[food] = [msg.x[i], msg.y[i]]
+
+    def delivery_request_callback(self, msg):
+        self.food_pickup_list = msg.split(',')
+        self.pickup_idx = 0
+        self.mode = Mode.FOODNAV
+
+    def set_food_pickup_loc(self):
+        food = self.food_pickup_list[self.pickup_idx]
+        self.x_g, self.y_g = self.food_loc_dict[food]
+        self.theta_g = 0
+
+    def init_pickup(self):
+        self.pickup_Start = rospy.get_rostime()
+        self.mode = Mode.FOODPICKUP
+
+    def has_pickedup(self):
+        """ checks if pickup maneuver is over """
+        return (self.mode == Mode.FOODPICKUP and (rospy.get_rostime()-self.pickup_start)>rospy.Duration.from_sec(STOP_TIME))
+
 
     def nav_pose_callback(self, msg):
         self.x_g = msg.x
@@ -163,11 +178,6 @@ class Supervisor:
 
         self.pose_goal_publisher.publish(nav_g_msg)
 
-    def set_food_pickup_loc(self):
-        self.x_g = self.food_loc_dict.x[self.food_index]
-        self.y_g = self.food_loc_dict.y[self.food_index]
-        self.theta_g = 0
-
     def stay_idle(self):
         """ sends zero velocity to stay put """
 
@@ -199,6 +209,11 @@ class Supervisor:
         """ checks if crossing maneuver is over """
 
         return (self.mode == Mode.CROSS and (rospy.get_rostime()-self.cross_start)>rospy.Duration.from_sec(CROSSING_TIME))
+
+    def return_home(self):
+        self.x_g = 0
+        self.y_g = 0
+        self.theta_g = 0
 
     def loop(self):
         """ the main loop of the robot. At each iteration, depending on its
@@ -253,15 +268,23 @@ class Supervisor:
             else:
                 self.nav_to_pose()
 
-        elif self.mode == Mode.PICKUP:
+        elif self.mode == Mode.FOODNAV:
+            self.set_food_pickup_loc()
             if self.close_to(self.x_g,self.y_g,self.theta_g):
-                self.food_index += 1
-                self.set_food_pickup_loc()
-                if food_index == len(self.food_pickup_list):
-                    #add some way to nav to home at end of pickups
-                    self.mode = Mode.IDLE
+                self.pickup_init()
             else:
                 self.nav_to_pose()
+
+        elif self.mode == Mode.FOODPICKUP:
+            if self.has_pickedup:
+                if self.pickup_idx == len(self.pickup_list):
+                    self.return_home()
+                    self.mode = Mode.NAV
+                else:
+                    self.pickup_idx +=1
+                    self.mode = Mode.FOODNAV
+            else:
+                self.stay_idle()
 
         else:
             raise Exception('This mode is not supported: %s'
