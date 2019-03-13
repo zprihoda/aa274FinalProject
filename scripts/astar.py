@@ -74,21 +74,19 @@ class AStar(object):
     #           x - tuple state
     # OUTPUT: List of neighbors that are free, as a list of TUPLES
     def get_neighbors(self, x):
-        list_ns = []
-        pt_x = x[0]
-        pt_y = x[1]
-        delta = self.resolution*np.array([-1,0,1])
-        for x_delta in delta:
-            for y_delta in delta:
-                #Dont add case where x_delta=y_delta=0 = orig. point
-                if not (x_delta == 0 and y_delta == 0):
-                    pt_delta = (pt_x+x_delta,pt_y+y_delta)
-                    #Check if point is valid
-                    if self.is_free(pt_delta) == True:
-                        #snap to grid
-                        snap_pt = self.snap_to_grid(pt_delta)
-                        list_ns.append(snap_pt)
-        return list_ns
+                
+        d = self.resolution
+        dx = [0.0, 0.0, -d, d, d, d, -d, -d]
+        dy = [-d, d, 0.0, 0.0, -d, d, -d, d]
+        
+        NBs = []
+        for i in range(8):
+            NB = self.snap_to_grid((x[0]+dx[i], x[1]+dy[i]))
+            if self.is_free(NB):
+                NBs.append(NB)
+                
+        return NBs
+    
 
 
     # Gets the state in open_set that has the lowest f_score
@@ -150,10 +148,12 @@ class AStar(object):
             for NB in NBs:
                 if NB in self.closed_set:
                     continue
-                NB_gscore = self.distance(n_current,self.x_init) + self.distance(n_current,NB)
+                
+                NB_gscore = self.g_score[n_current] + self.distance(n_current, NB)                
                 if NB not in self.open_set:
                     self.open_set.append(NB)
-                elif NB_gscore > self.distance(NB,self.x_init):
+               
+                elif NB_gscore > self.g_score[NB]:
                     continue
                 NB_hscore = self.distance(NB,self.x_goal)
                 self.f_score[NB] = NB_gscore + NB_hscore
