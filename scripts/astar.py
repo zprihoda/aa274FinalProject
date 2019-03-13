@@ -138,7 +138,6 @@ class AStar(object):
     # OUTPUT: Boolean, True if a solution from x_init to x_goal was found
     def solve(self):
         while len(self.open_set)>0:
-            rospy.loginfo("here")
             n_current = self.find_best_f_score()
             #If goal found
             if n_current == self.x_goal:
