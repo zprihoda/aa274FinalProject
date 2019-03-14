@@ -16,6 +16,7 @@ from aa274_final.msg import DetectedObject, ObjectLocations
 import tf
 import math
 from enum import Enum
+import numpy as np
 
 # if sim is True/using gazebo, therefore want to subscribe to /gazebo/model_states\
 # otherwise, they will use a TF lookup (hw2+)
@@ -74,6 +75,8 @@ class Supervisor:
         self.nav_goal_publisher = rospy.Publisher('/cmd_nav', Pose2D, queue_size=10)
         # command vel (used for idling)
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        
+        self.stop_loc_list=[]
 
         # subscribers
         # stop sign detector
@@ -87,9 +90,11 @@ class Supervisor:
         rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.rviz_goal_callback)
 
         rospy.Subscriber('/objectLocations', ObjectLocations, self.food_list_callback)
+        #Subscribe to the stop sign locations.
+        rospy.Subscriber('/stopLocations', ObjectLocations, self.stop_list_callback)
         rospy.Subscriber('/delivery_request', String, self.delivery_request_callback)
 
-
+        rospy.Subscriber('/stoplist_request',String,self.stop_request_callback)
     def gazebo_callback(self, msg):
         pose = msg.pose[msg.name.index("turtlebot3_burger")]
         twist = msg.twist[msg.name.index("turtlebot3_burger")]
@@ -125,17 +130,41 @@ class Supervisor:
             pass
         self.mode = Mode.NAV
 
+    def stop_list_callback(self, msg):
+        #store list of all stops
+        for i in range(len(msg.names)):
+            self.stop_loc_list += np.array([msg.x[i], msg.y[i]])
+            
+    def near_a_stop(self):
+        #return true if we are near a stop based on List of stops, else return false
+        n=len(self.stop_loc_list)
+        distance=0.1;
+        if n==0:
+            return False
+        for k in range(n):
+            d=np.sqrt((self.x-self.stop_loc_list[0][0])^2+(self.y-self.stop_loc_list[0][1])^2)
+            if d<distance:
+                return True
+        return False
+                
+        
+    
     def food_list_callback(self, msg):
         #store list of all foods
         self.food_loc_dict = {}
         for i in range(len(msg.names)):
-            food = msg.names[i]
-            self.food_loc_dict[food] = [msg.x[i], msg.y[i]]
+            stop = msg.names[i]
+            self.food_loc_dict[stop] = [msg.x[i], msg.y[i]]
 
     def delivery_request_callback(self, msg):
         self.food_pickup_list = msg.data.split(',')
         self.pickup_idx = 0
         self.mode = Mode.FOODNAV
+        
+    def stop_request_callback(self, msg):
+        boolean=self.near_a_stop()
+        if boolean:
+            self.mode=Mode.STOP
 
     def set_food_pickup_loc(self):
         while True:
