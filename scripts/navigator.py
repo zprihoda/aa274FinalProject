@@ -44,7 +44,7 @@ KDX = 1.5
 KDY = 1.5
 
 # smoothing condition (see splrep documentation)
-SMOOTH = .01
+SMOOTH = .005
 
 class Navigator:
 
