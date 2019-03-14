@@ -153,8 +153,8 @@ class Supervisor:
         #store list of all foods
         self.food_loc_dict = {}
         for i in range(len(msg.names)):
-            stop = msg.names[i]
-            self.food_loc_dict[stop] = [msg.x[i], msg.y[i]]
+            food = msg.names[i]
+            self.food_loc_dict[food] = [msg.x[i], msg.y[i]]
 
     def delivery_request_callback(self, msg):
         self.food_pickup_list = msg.data.split(',')
