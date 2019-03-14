@@ -50,14 +50,14 @@ class PoseController:
         # goal state
         self.x_g = None
         self.y_g = None
-        self.theta_g = None        
+        self.theta_g = None
 
         # time last pose command was received
         self.cmd_pose_time = rospy.get_rostime()
         # if using gazebo, then subscribe to model states
         if use_gazebo:
             rospy.Subscriber('/gazebo/model_states', ModelStates, self.gazebo_callback)
- 
+
         self.trans_listener = tf.TransformListener()
 
 
@@ -66,6 +66,9 @@ class PoseController:
         # calls cmd_pose_callback. It should subscribe to '/cmd_pose'
 
         rospy.Subscriber('/cmd_pose', Pose2D, self.cmd_pose_callback)
+
+        rospy.Subscriber('/ctrl_stop', String, self.ctrl_stop_callback)
+
 
         ######### END OF YOUR CODE ##########
 
@@ -92,6 +95,10 @@ class PoseController:
         ######### END OF YOUR CODE ##########
         self.cmd_pose_time = rospy.get_rostime()
 
+    def ctrl_stop_callback(self,msg):
+        self.x_g = None
+        self.y_g = None
+        self.theta_g = None
 
     def get_ctrl_output(self):
         if self.x_g is None:
@@ -121,8 +128,8 @@ class PoseController:
             R = np.array([[np.cos(self.theta_g), np.sin(self.theta_g)], [-np.sin(self.theta_g), np.cos(self.theta_g)]])
             rel_coords_rot = np.dot(R,rel_coords)
 
-            th_rot = self.theta-self.theta_g 
-            rho = linalg.norm(rel_coords) 
+            th_rot = self.theta-self.theta_g
+            rho = linalg.norm(rel_coords)
 
             if (rho < 0.03) & abs(th_rot < 0.08):
                 rospy.loginfo("Close to goal: commanding zero controls")
@@ -132,13 +139,13 @@ class PoseController:
                 cmd_x_dot = 0
                 cmd_theta_dot = 0
             else:
-                ang = np.arctan2(rel_coords_rot[1],rel_coords_rot[0])+np.pi 
-                angs = wrapToPi(np.array([ang-th_rot, ang])) 
-                alpha = angs[0] 
-                delta = angs[1] 
+                ang = np.arctan2(rel_coords_rot[1],rel_coords_rot[0])+np.pi
+                angs = wrapToPi(np.array([ang-th_rot, ang]))
+                alpha = angs[0]
+                delta = angs[1]
 
-                V = K1*rho*np.cos(alpha) 
-                om = K2*alpha + K1*np.sinc(2*alpha/np.pi)*(alpha+K3*delta) 
+                V = K1*rho*np.cos(alpha)
+                om = K2*alpha + K1*np.sinc(2*alpha/np.pi)*(alpha+K3*delta)
 
                 # Apply saturation limits
                 cmd_x_dot = np.sign(V)*min(V_MAX, np.abs(V))

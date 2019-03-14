@@ -27,7 +27,7 @@ mapping = rospy.get_param("map")
 
 # threshold at which we consider the robot at a location
 POS_EPS = .1
-THETA_EPS = .3
+THETA_EPS = .2
 
 # time to stop at a stop sign
 STOP_TIME = 3
@@ -74,6 +74,9 @@ class Supervisor:
         self.nav_goal_publisher = rospy.Publisher('/cmd_nav', Pose2D, queue_size=10)
         # command vel (used for idling)
         self.cmd_vel_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+
+        self.ctrl_stop_publisher = rospy.Publisher('/ctrl_stop', String, queue_size=10)
+
 
         # subscribers
         # stop sign detector
@@ -199,7 +202,7 @@ class Supervisor:
 
     def stay_idle(self):
         """ sends zero velocity to stay put """
-
+        self.ctrl_stop_publisher.publish('Stop')
         vel_g_msg = Twist()
         self.cmd_vel_publisher.publish(vel_g_msg)
 
