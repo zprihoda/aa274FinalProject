@@ -30,6 +30,7 @@ class ObjectLocationTracker():
         rospy.Subscriber('/detector/objects', DetectedObjectList,
                          self.detected_objects_callback, queue_size=10)
         self.trans_listener = tf.TransformListener()
+        self.trans_listener.waitForTransform('/map','/base_footprint',rospy.Time(),rospy.Duration(4.0))
 
         # Publishers
         self.obj_pub = rospy.Publisher('/objectLocations', ObjectLocations, queue_size=10)
@@ -53,7 +54,6 @@ class ObjectLocationTracker():
         point.header.frame_id = '/base_footprint'
         point.header.stamp = rospy.Time(0)
 
-        self.trans_listener.waitForTransform('/map','/base_footprint',rospy.Time(0),rospy.Duration(4.0))
         p_out = self.trans_listener.transformPoint('/map',point)
         return p_out
 
