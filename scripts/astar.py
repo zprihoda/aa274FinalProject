@@ -167,7 +167,7 @@ class DetOccupancyGrid2D(object):
         self.width = width
         self.height = height
         self.obstacles = obstacles
-        self.buffer = 0.04 + 0.075 # safety_buffer + robot radius (meters)
+        self.buffer = 0.075 # robot radius (meters)
 
     def is_free(self, x):
         for obs in self.obstacles:
